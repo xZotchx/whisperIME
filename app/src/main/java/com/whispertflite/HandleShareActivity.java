@@ -26,7 +26,6 @@ import com.github.houbb.opencc4j.util.ZhConverterUtil;
 import com.whispertflite.asr.RecordBuffer;
 import com.whispertflite.asr.Whisper;
 import com.whispertflite.asr.WhisperResult;
-import com.whispertflite.utils.ThemeUtils;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -230,6 +229,10 @@ public class HandleShareActivity extends AppCompatActivity {
 
         extractor.selectTrack(audioTrackIndex);
         String mime = format.getString(MediaFormat.KEY_MIME);
+        if (mime == null) {
+            extractor.release();
+            return null;
+        }
         MediaCodec codec = MediaCodec.createDecoderByType(mime);
         codec.configure(format, null, null, 0);
         codec.start();
