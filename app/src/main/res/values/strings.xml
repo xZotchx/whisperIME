@@ -39,7 +39,7 @@
     <string name="error_no_input">No voice input received</string>
     <string name="auto_lang">Detect language</string>
     <string name="share_processing_title">Whisper Transcription</string>
-    <string name="share_waiting">Processing audio...</string>
+    <string name="share_waiting">Processing audio…</string>
     <string name="share_error_model">Models not found. Please open the main app to download them.</string>
     <string name="share_error_generic">Error processing audio.</string>
     <string name="share_unsupported">Launch method not supported.</string>
