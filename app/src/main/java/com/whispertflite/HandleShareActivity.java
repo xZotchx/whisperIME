@@ -46,7 +46,6 @@ public class HandleShareActivity extends AppCompatActivity {
     private ProgressBar progressBar;
 
     private Whisper mWhisper = null;
-    private File sdcardDataFolder = null;
     private SharedPreferences sp = null;
 
     @Override
@@ -94,8 +93,7 @@ public class HandleShareActivity extends AppCompatActivity {
                 return;
             }
 
-            // Chunking logic (30 seconds per chunk for TFLite model)
-            final int bytesPerSample = 2; // PCM 16-bit
+            final int bytesPerSample = 2;
             final int chunkDurationSeconds = 30;
             final int chunkSizeInBytes = TARGET_SAMPLE_RATE * chunkDurationSeconds * bytesPerSample;
 
@@ -145,7 +143,7 @@ public class HandleShareActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 progressBar.setVisibility(View.GONE);
                 if (fullTranscription.length() > 0) {
-                    String finalText = String.format(getString(R.string.share_lang_detected), languageDetected.toString())
+                    String finalText = String.format(getString(R.string.share_lang_detected), languageDetected)
                             + "\n\n" + fullTranscription.toString().trim();
                     transcriptionTextView.setText(finalText);
                 } else {
@@ -157,14 +155,16 @@ public class HandleShareActivity extends AppCompatActivity {
             Log.e(TAG, "Error processing audio", e);
             showError("Error: " + e.getMessage());
         } finally {
-            if (tempFile != null) {
-                tempFile.delete();
+            if (tempFile != null && tempFile.exists()) {
+                if (!tempFile.delete()) {
+                    Log.w(TAG, "Failed to delete temporary file: " + tempFile.getAbsolutePath());
+                }
             }
         }
     }
 
     private void initializeWhisper() throws IOException {
-        sdcardDataFolder = this.getExternalFilesDir(null);
+        File sdcardDataFolder = this.getExternalFilesDir(null);
         sp = PreferenceManager.getDefaultSharedPreferences(this);
 
         String modelName = sp.getString("modelName", MULTI_LINGUAL_TOP_WORLD_SLOW);
@@ -237,8 +237,6 @@ public class HandleShareActivity extends AppCompatActivity {
         codec.configure(format, null, null, 0);
         codec.start();
 
-        ByteBuffer[] inputBuffers = codec.getInputBuffers();
-        ByteBuffer[] outputBuffers = codec.getOutputBuffers();
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
         ByteArrayOutputStream pcmOutputStream = new ByteArrayOutputStream();
 
@@ -248,24 +246,28 @@ public class HandleShareActivity extends AppCompatActivity {
         while (!isEOS) {
             int inputBufIndex = codec.dequeueInputBuffer(TIMEOUT_US);
             if (inputBufIndex >= 0) {
-                ByteBuffer inputBuffer = inputBuffers[inputBufIndex];
-                int sampleSize = extractor.readSampleData(inputBuffer, 0);
-                if (sampleSize < 0) {
-                    codec.queueInputBuffer(inputBufIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
-                    isEOS = true;
-                } else {
-                    codec.queueInputBuffer(inputBufIndex, 0, sampleSize, extractor.getSampleTime(), 0);
-                    extractor.advance();
+                ByteBuffer inputBuffer = codec.getInputBuffer(inputBufIndex);
+                if (inputBuffer != null) {
+                    int sampleSize = extractor.readSampleData(inputBuffer, 0);
+                    if (sampleSize < 0) {
+                        codec.queueInputBuffer(inputBufIndex, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                        isEOS = true;
+                    } else {
+                        codec.queueInputBuffer(inputBufIndex, 0, sampleSize, extractor.getSampleTime(), 0);
+                        extractor.advance();
+                    }
                 }
             }
 
             int outputBufIndex = codec.dequeueOutputBuffer(info, TIMEOUT_US);
             if (outputBufIndex >= 0) {
-                ByteBuffer outputBuffer = outputBuffers[outputBufIndex];
-                byte[] pcmChunk = new byte[info.size];
-                outputBuffer.get(pcmChunk);
-                outputBuffer.clear();
-                pcmOutputStream.write(pcmChunk);
+                ByteBuffer outputBuffer = codec.getOutputBuffer(outputBufIndex);
+                if (outputBuffer != null) {
+                    byte[] pcmChunk = new byte[info.size];
+                    outputBuffer.get(pcmChunk);
+                    outputBuffer.clear();
+                    pcmOutputStream.write(pcmChunk);
+                }
                 codec.releaseOutputBuffer(outputBufIndex, false);
             }
         }
@@ -287,7 +289,7 @@ public class HandleShareActivity extends AppCompatActivity {
 
         byte[] finalPcm;
         if (originalSampleRate != TARGET_SAMPLE_RATE) {
-            finalPcm = resamplePcm(monoPcm, originalSampleRate, TARGET_SAMPLE_RATE);
+            finalPcm = resamplePcm(monoPcm, originalSampleRate);
         } else {
             finalPcm = monoPcm;
         }
@@ -307,9 +309,9 @@ public class HandleShareActivity extends AppCompatActivity {
         return monoPcm;
     }
 
-    private byte[] resamplePcm(byte[] pcmData, int fromRate, int toRate) {
+    private byte[] resamplePcm(byte[] pcmData, int fromRate) {
         int numSamples = pcmData.length / 2;
-        int newNumSamples = (int)Math.round((double)numSamples * toRate / fromRate);
+        int newNumSamples = (int)Math.round((double)numSamples * TARGET_SAMPLE_RATE / fromRate);
         byte[] resampledData = new byte[newNumSamples * 2];
         double ratio = (double) (numSamples - 1) / (newNumSamples - 1);
 
