@@ -98,5 +98,16 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".HandleShareActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Whisper.ShareDialog">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+            </intent-filter>
+        </activity>
+
     </application>
 </manifest>
