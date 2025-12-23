@@ -102,6 +102,10 @@ public class HandleShareActivity extends AppCompatActivity {
 
             int offset = 0;
             while (offset < fullPcmData.length) {
+                if (isFinishing() || isDestroyed()) {
+                    Log.d(TAG, "Activity is finishing, stopping transcription thread.");
+                    break;
+                }
                 int length = Math.min(chunkSizeInBytes, fullPcmData.length - offset);
                 byte[] chunkPcmData = Arrays.copyOfRange(fullPcmData, offset, offset + length);
 
